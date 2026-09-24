@@ -288,7 +288,7 @@ and consumer tests exercise this form.
 ## Validation
 
 ```sh
-just ecosystem-test proptest
+(cd ../verification && just ecosystem-test proptest)
 ```
 
 Tests include exact integer failure boundaries, wide signed ranges, filtering,
