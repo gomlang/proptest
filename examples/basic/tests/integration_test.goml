@@ -98,3 +98,23 @@ fn downstream_subnormal_singletons_replay_exactly() -> () {
         );
     }
 }
+
+#[test]
+fn downstream_uniform_choices_replay_and_shrink() -> () {
+    let choices = testing::expect_ok(
+        proptest::uniform_select(Vec::from_array(["first", "second", "third"]), 128),
+        "choices",
+    );
+    let failure = testing::expect_some(
+        testing::expect_ok(
+            proptest::check(choices, proptest::Config::new(42), |_| false),
+            "property",
+        ),
+        "failure",
+    );
+    testing::assert_eq(failure.minimal, "first");
+    testing::assert_eq(
+        testing::expect_ok(proptest::replay(choices, failure.seed, 64), "replay"),
+        failure.initial,
+    );
+}

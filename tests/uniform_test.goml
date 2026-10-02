@@ -1,0 +1,107 @@
+package tests;
+
+use ecosystem::proptest;
+use proptest::Strategy;
+use std::testing;
+use std::rand;
+
+#[test]
+fn uniform_rejection_has_exact_replay_and_attempt_bounds() -> () {
+    let zero_seed: u64 = 7046029254386353131;
+    testing::assert_eq(rand::next_u64(zero_seed), 0);
+    let width: u64 = 0x8000000000000001;
+    let one = testing::expect_ok(proptest::uniform_unsigneds(0, width, 1), "one attempt");
+    testing::assert_err(one.generate(zero_seed, 1));
+    let two = testing::expect_ok(proptest::uniform_unsigneds(0, width, 2), "two attempts");
+    testing::assert_eq(
+        testing::expect_ok(proptest::replay(two, zero_seed, 1), "replay"),
+        rand::next_u64(0) % width,
+    );
+    let old = testing::expect_ok(proptest::unsigneds(0, width), "legacy");
+    testing::assert_eq(testing::expect_ok(proptest::replay(old, zero_seed, 1), "legacy seed"), 0);
+    let values = Vec::from_array([10, 20, 30]);
+    let selection = testing::expect_ok(proptest::uniform_select(values, 2), "selection");
+    values[0] = 100;
+    testing::assert_eq(
+        testing::expect_ok(proptest::replay(selection, zero_seed, 1), "selected"),
+        [10, 20, 30][(rand::next_u64(0) % 3).to_isize()],
+    );
+    let sample = testing::expect_ok(selection.generate(zero_seed, 1), "snapshot");
+    testing::assert_eq(sample.children()[0].value, 10);
+    testing::assert_err(proptest::uniform_select(Vec::from_array([1]), 0));
+    testing::assert_err(proptest::uniform_select::[isize](Vec::new(), 1));
+    testing::assert_err(proptest::uniform_unsigneds(1, 1, 10));
+    testing::assert_err(proptest::uniform_integers(2, 1, 10));
+    testing::assert_err(proptest::uniform_integers(0, 1, 1025));
+}
+
+#[test]
+fn uniform_wide_ranges_and_shrinks_preserve_bounds() -> () {
+    let lower: isize = -9223372036854775807 - 1;
+    let upper: isize = 9223372036854775807;
+    for (minimum, maximum) in[(lower, upper), (lower, -1), (10, upper), (-20, -10)] {
+        let generator = testing::expect_ok(
+            proptest::uniform_integers(minimum, maximum, 128),
+            "signed",
+        );
+        for seed in 0..64 {
+            let sample = testing::expect_ok(generator.generate(seed.to_u64(), 64), "sample");
+            testing::assert(sample.value >= minimum && sample.value < maximum);
+            for child in sample.children() {
+                testing::assert(child.value >= minimum && child.value < maximum);
+            }
+        }
+    }
+    let generator = testing::expect_ok(
+        proptest::uniform_unsigneds(0, 0xffffffffffffffff, 128),
+        "wide unsigned",
+    );
+    for seed in 0..64 {
+        let sample = testing::expect_ok(generator.generate(seed.to_u64(), 64), "sample");
+        testing::assert(sample.value < 0xffffffffffffffff);
+        for child in sample.children() {
+            testing::assert(child.value < 0xffffffffffffffff);
+        }
+    }
+    testing::assert_eq(
+        testing::expect_ok(
+            proptest::replay(proptest::any_u64(), 7046029254386353131, 1),
+            "full width zero",
+        ),
+        0,
+    );
+    testing::assert_eq(
+        testing::expect_ok(
+            proptest::replay(proptest::any_i64(), 3453682501520545093, 1),
+            "full width signed minimum",
+        ),
+        lower.to_i64(),
+    );
+}
+
+#[test]
+fn uniform_full_width_endpoints_and_high_singleton_replay() -> () {
+    testing::assert_eq(
+        testing::expect_ok(
+            proptest::replay(proptest::any_u64(), 3558559446808474027, 1),
+            "full width unsigned maximum",
+        ),
+        0xffffffffffffffff,
+    );
+    let maximum: i64 = 9223372036854775807;
+    testing::assert_eq(
+        testing::expect_ok(
+            proptest::replay(proptest::any_i64(), 959135552437182909, 1),
+            "full width signed maximum",
+        ),
+        maximum,
+    );
+    let singleton = testing::expect_ok(
+        proptest::uniform_unsigneds(0xfffffffffffffffe, 0xffffffffffffffff, 1),
+        "high singleton",
+    );
+    testing::assert_eq(
+        testing::expect_ok(proptest::replay(singleton, 7046029254386353131, 1), "singleton"),
+        0xfffffffffffffffe,
+    );
+}
