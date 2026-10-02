@@ -186,3 +186,37 @@ fn full_machine_integer_range() -> () {
         ),
     );
 }
+
+#[test]
+fn finite_float_extremes_preserve_generation_and_shrink_bounds() -> () {
+    let tiny = float64_from_bits(1);
+    let largest = float64_from_bits(0x7fefffffffffffff);
+    for (minimum, maximum) in[
+        (tiny, tiny),
+        (tiny, tiny * 3.0),
+        (-tiny * 3.0, -tiny),
+        (-tiny, tiny),
+        (largest, largest),
+        (largest / 2.0, largest),
+        (-largest, largest),
+        (-largest, -largest / 2.0),
+    ] {
+        let generator = testing::expect_ok(proptest::finite_floats(minimum, maximum), "bounds");
+        for seed in 0..128 {
+            let pending = Vec::from_array(
+                [testing::expect_ok(generator.generate(seed.to_u64(), 64), "sample")],
+            );
+            while let Some(sample) = pending.pop() {
+                testing::assert(math::is_finite(sample.value));
+                testing::assert(sample.value >= minimum && sample.value <= maximum);
+                pending.extend(sample.children());
+            }
+        }
+    }
+    let negative_zero = float64_from_bits(0x8000000000000000);
+    let fixed = testing::expect_ok(proptest::finite_floats(negative_zero, 0.0), "zero");
+    testing::assert_eq(
+        float64_to_bits(testing::expect_ok(fixed.generate(1, 1), "zero").value),
+        0x8000000000000000,
+    );
+}
