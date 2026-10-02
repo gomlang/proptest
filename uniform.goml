@@ -1,0 +1,85 @@
+package proptest;
+
+use std::rand;
+
+fn uniform_attempts(attempts: isize) -> Result[(), string] {
+    if attempts < 1 || attempts > 1024 {
+        return Result::Err("uniform draw attempts must be between 1 and 1024")
+    }
+    Result::Ok(())
+}
+
+fn uniform_below(seed: u64, bound: u64, attempts: isize) -> Result[u64, string] {
+    let threshold = (0 - bound) % bound;
+    let mut state = seed;
+    for _ in 0..attempts {
+        let value = rand::next_u64(state);
+        if value >= threshold {
+            return Result::Ok(value % bound)
+        }
+        state += 0x9e3779b97f4a7c15;
+    }
+    Result::Err("uniform generator exhausted its draw budget")
+}
+
+pub fn uniform_unsigneds(minimum: u64, maximum: u64, attempts: isize) -> Result[
+    Generator[u64],
+    string,
+] {
+    uniform_attempts(attempts)?;
+    if minimum >= maximum {
+        return Result::Err("unsigned range must be nonempty")
+    }
+    Result::Ok(
+        Generator::new(
+            |seed, _| Result::Ok(
+                unsigned_sample(
+                    minimum + uniform_below(seed, maximum - minimum, attempts)?,
+                    minimum,
+                ),
+            ),
+        ),
+    )
+}
+
+pub fn uniform_integers(minimum: isize, maximum: isize, attempts: isize) -> Result[
+    Generator[isize],
+    string,
+] {
+    uniform_attempts(attempts)?;
+    if minimum >= maximum {
+        return Result::Err("integer range must be nonempty")
+    }
+    let target = if minimum > 0 {
+        minimum
+    } else if maximum <= 0 {
+        maximum - 1
+    } else {
+        0
+    };
+    Result::Ok(
+        Generator::new(
+            |seed, _| {
+                let width = maximum.to_u64() - minimum.to_u64();
+                let value = (minimum.to_u64() + uniform_below(seed, width, attempts)?).to_isize();
+                Result::Ok(integer_sample(value, target))
+            },
+        ),
+    )
+}
+
+pub fn uniform_select[T](values: Vec[T], attempts: isize) -> Result[Generator[T], string] {
+    uniform_attempts(attempts)?;
+    if values.is_empty() {
+        return Result::Err("selection requires at least one value")
+    }
+    let snapshot = values.freeze();
+    Result::Ok(
+        Generator::new(
+            |seed, _| {
+                let index = uniform_below(seed, snapshot.len().to_u64(), attempts)?.to_isize();
+                Result::Ok(map_sample(integer_sample(index, 0), |position| snapshot.get(position)))
+            },
+        ),
+    )
+}

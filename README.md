@@ -27,6 +27,8 @@ returning candidate samples. `Sample::leaf` makes a value with no smaller cases.
 | --- | --- |
 | `integers(min, max)` | Half-open machine-integer range, including ranges wider than signed `isize` |
 | `unsigneds(min, max)` | Half-open `u64` range with shrinking toward the lower bound |
+| `uniform_integers(min, max, attempts)`, `uniform_unsigneds(min, max, attempts)` | Opt-in rejection-sampled half-open ranges, retaining numeric shrinking |
+| `uniform_select(values, attempts)` | Snapshotted choices with rejection-sampled indices and shrinking toward the first |
 | `any_u64()`, `any_i64()` | Full-width integer generation, shrinking toward zero |
 | `just(value)` | One constant value |
 | `booleans()` | Boolean values; true shrinks to false |
@@ -61,7 +63,18 @@ length is 1,000,000 and recursive construction depth is at most 64. Floating
 shrinking has a depth limit of 64. Finite generation clamps interpolation rounding
 to the requested inclusive bounds, including subnormal and singleton ranges.
 A singleton preserves the supplied lower bound, including its signed zero. These generators are intended for testing;
-their modulo-based selections do not promise unbiased statistical sampling.
+their legacy modulo-based selections do not promise unbiased statistical sampling.
+
+The `uniform_*` generators reject the incomplete low residue interval before
+reducing to a bounded index, removing modulo reduction bias for uniform random
+words. Rejected words advance a local SplitMix64 stream; `attempts` (1–1024)
+bounds draws for each generation and exhaustion returns `Err`. Use 128 for a
+comfortable general-purpose bound, or a smaller value to exercise rejection
+handling. Seed, bounds, choices and attempt limit determine replay. Existing
+`integers`, `unsigneds`, `select` and composite generators keep their established
+seed sequences. `any_u64`/`any_i64` already map full-width random words directly;
+the new half-open range APIs cover widths up to u64::MAX on Linux amd64. These
+APIs are deterministic pseudorandom test generators, not cryptographic randomness.
 
 Collection length bounds are inclusive. `attempts` bounds total draws while
 constructing one unique collection or command sequence, including accepted draws.
