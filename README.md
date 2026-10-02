@@ -58,7 +58,9 @@ selected generator; they do not switch arbitrarily to an unrelated generator.
 
 Invalid ranges and exhausted rejection budgets return errors. Maximum vector
 length is 1,000,000 and recursive construction depth is at most 64. Floating
-shrinking has a depth limit of 64. These generators are intended for testing;
+shrinking has a depth limit of 64. Finite generation clamps interpolation rounding
+to the requested inclusive bounds, including subnormal and singleton ranges.
+A singleton preserves the supplied lower bound, including its signed zero. These generators are intended for testing;
 their modulo-based selections do not promise unbiased statistical sampling.
 
 Collection length bounds are inclusive. `attempts` bounds total draws while
