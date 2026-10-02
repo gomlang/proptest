@@ -87,6 +87,10 @@ fn downstream_lazy_shrinks_and_structured_reports() -> () {
 fn downstream_subnormal_singletons_replay_exactly() -> () {
     let tiny = float64_from_bits(1);
     let generator = testing::expect_ok(proptest::finite_floats(tiny, tiny), "tiny singleton");
+    testing::assert_eq(
+        testing::expect_ok(proptest::replay(generator, 3453682501520545093, 64), "halfway replay"),
+        tiny,
+    );
     for seed in 0..128 {
         testing::assert_eq(
             testing::expect_ok(proptest::replay(generator, seed.to_u64(), 64), "replay"),
