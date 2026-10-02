@@ -283,7 +283,7 @@ not converted into property failures.
 
 Closures used with an associated `Strategy::Item` sometimes need explicit
 parameter types for numeric operators in the current GoML checker. The examples
-and consumer tests exercise this form.
+and example tests exercise this form.
 
 ## Validation
 
@@ -304,3 +304,15 @@ execution/cleanup errors. A separate module
 implements its own associated-type strategy and lazy shrink callbacks and uses
 the structured runner, campaigns and a custom model/system through a normally
 resolved dependency.
+
+## Development and examples
+
+Requires GoML 0.1.55 or newer. The `examples/basic/` example shares the root manifest. From the library root, run:
+
+```sh
+goml run --example basic
+goml test
+goml verify --timeout 300s
+```
+
+`goml test` builds the example and runs its tests. `goml verify` repeats the example checks as an independent module against an isolated registry snapshot. `(cd ../verification && just ecosystem-test proptest)` also retains the library-specific smoke and compatibility checks.
