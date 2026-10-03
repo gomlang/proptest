@@ -1,5 +1,7 @@
 package proptest;
 
+use std::panic;
+
 #[derive(Debug, PartialEq)]
 pub enum MachineStage {
     Limit,
@@ -114,7 +116,13 @@ impl[M, S, C] StateMachine[M, S, C] {
                 Option::None,
             ),
         };
-        let result = self.execute_sequence(model, system, commands);
+        let result = match panic::catch(|| self.execute_sequence(model, system, commands)) {
+            Ok(result) => result,
+            Err(original) => {
+                let _ = panic::catch(|| (self.cleanup)(system));
+                panic::resume(original)
+            },
+        };
         match (self.cleanup)(system) {
             Ok(()) => result,
             Err(error) => {

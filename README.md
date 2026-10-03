@@ -216,7 +216,7 @@ test. Its constructor takes a command limit and five callbacks:
 | `transition: (M, C) -> Result[M, string]` | Compute the next model without changing the system; a rejected precondition discards the case |
 | `execute: (S, C) -> Result[(), string]` | Apply one command to the system; errors fail the case |
 | `invariant: (M, S) -> Result[(), string]` | Check the initial state and every successfully executed command |
-| `cleanup: (S) -> Result[(), string]` | Clean up exactly once after successful setup on every normal return path |
+| `cleanup: (S) -> Result[(), string]` | Clean up exactly once after successful setup on normal returns and callback panics |
 
 `run(commands)` returns `MachineReport`; `check(commands)` returns its `Case`
 for direct use with `run`, `run_campaign` or the `stateful` generator. The report
@@ -229,9 +229,15 @@ setup. The helper snapshots the command vector, checks each transition before
 executing the command, and stops at the first failure or rejected precondition.
 Cleanup failures promote passing/discarded cases to failures; an existing error
 and its stage remain available alongside the cleanup error. Setup failures must
-clean up partially created resources within the setup callback. Callbacks must
-return normally: panics and nontermination are not caught, and model/command
-values with mutable internals still require a caller-defined isolation policy.
+clean up partially created resources within the setup callback, including if it
+panics. After successful setup, a panic from a transition, execution or invariant
+callback runs cleanup once and then resumes the original panic, preserving its
+message and stack. In that path a cleanup error or panic is suppressed so it cannot
+replace the original panic. When execution returns normally, a cleanup panic
+propagates normally; returned cleanup errors retain the report behavior above.
+Panics are not converted into property failures. Nontermination cannot be caught,
+and model/command values with mutable internals still require a caller-defined
+isolation policy.
 
 ## Lazy shrinking and budgets
 

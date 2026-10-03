@@ -1,0 +1,134 @@
+package tests;
+
+use ecosystem::proptest;
+use std::panic;
+use std::testing;
+
+fn panic_machine(stage: string, cleanup_mode: isize, events: Vec[string]) -> proptest::StateMachine[
+    isize,
+    Ref[isize],
+    isize,
+] {
+    testing::expect_ok(
+        proptest::StateMachine::new(
+            2,
+            || {
+                events.push("setup");
+                if stage == "setup" {
+                    panic::raise("primary setup")
+                }
+                Result::Ok((0, Ref::new(0)))
+            },
+            |model: isize, command: isize| {
+                events.push("transition");
+                if stage == "transition" {
+                    panic::raise("primary transition")
+                }
+                Result::Ok(model + command)
+            },
+            |system: Ref[isize], command: isize| {
+                events.push("execute");
+                if stage == "execute" {
+                    panic::raise("primary execute")
+                }
+                system.set(system.get() + command);
+                Result::Ok(())
+            },
+            |model: isize, _: Ref[isize]| {
+                events.push("invariant");
+                if stage == "initial" && model == 0 {
+                    panic::raise("primary initial")
+                }
+                if stage == "invariant" && model > 0 {
+                    panic::raise("primary invariant")
+                }
+                Result::Ok(())
+            },
+            |_| {
+                events.push("cleanup");
+                if cleanup_mode == 1 {
+                    return Result::Err("cleanup failed")
+                }
+                if cleanup_mode == 2 {
+                    panic::raise("cleanup panic")
+                }
+                Result::Ok(())
+            },
+        ),
+        "machine",
+    )
+}
+
+#[test]
+fn state_machine_panic_runs_cleanup_once_and_preserves_primary_panic() -> () {
+    for stage in Vec::from_array(["initial", "transition", "execute", "invariant"]) {
+        for cleanup_mode in 0..3 {
+            let events = Vec::new();
+            let machine = panic_machine(stage, cleanup_mode, events);
+            let caught = testing::expect_err(
+                panic::catch(|| machine.run(Vec::from_array([1, 1]))),
+                "primary panic",
+            );
+            testing::assert_eq(caught.message(), "primary " + stage);
+            testing::assert(caught.stack_trace() != "");
+            testing::assert_eq(events[events.len() - 1], "cleanup");
+            let mut cleanup_count = 0;
+            for event in events {
+                if event == "cleanup" {
+                    cleanup_count += 1;
+                }
+            }
+            testing::assert_eq(cleanup_count, 1);
+        }
+    }
+}
+
+#[test]
+fn state_machine_setup_panic_has_no_cleanup_and_cleanup_only_panic_propagates() -> () {
+    let events = Vec::new();
+    let caught = testing::expect_err(
+        panic::catch(|| panic_machine("setup", 2, events).run(Vec::new())),
+        "setup panic",
+    );
+    testing::assert_eq(caught.message(), "primary setup");
+    testing::assert(events == Vec::from_array(["setup"]));
+    events.clear();
+    let caught = testing::expect_err(
+        panic::catch(|| panic_machine("none", 2, events).run(Vec::from_array([1]))),
+        "cleanup panic",
+    );
+    testing::assert_eq(caught.message(), "cleanup panic");
+    testing::assert(
+        events
+            == Vec::from_array(
+                ["setup", "invariant", "transition", "execute", "invariant", "cleanup"],
+            ),
+    );
+}
+
+#[test]
+fn state_machine_rethrows_the_original_panic_stack_without_replacing_it() -> () {
+    let original = testing::expect_err(panic::catch(|| panic::raise("preserved source")), "source");
+    let closed = Ref::new(0);
+    let machine = testing::expect_ok(
+        proptest::StateMachine::new(
+            1,
+            || Result::Ok((0, ())),
+            |_: isize, _: isize| panic::resume(original),
+            |_: (), _: isize| Result::Ok(()),
+            |_: isize, _: ()| Result::Ok(()),
+            |_: ()| {
+                closed.set(closed.get() + 1);
+                panic::raise("secondary cleanup")
+            },
+        ),
+        "machine",
+    );
+    let caught = testing::expect_err(
+        panic::catch(|| machine.check(Vec::from_array([1]))),
+        "resumed",
+    );
+    testing::assert_eq(caught.message(), original.message());
+    testing::assert_eq(caught.stack_trace(), original.stack_trace());
+    testing::assert_eq(closed.get(), 1);
+}

@@ -1,0 +1,33 @@
+package tests;
+
+use ecosystem::proptest;
+use std::panic;
+use std::testing;
+
+#[test]
+fn downstream_state_machine_releases_resources_before_propagating_panics() -> () {
+    let active = Ref::new(false);
+    let machine = testing::expect_ok(
+        proptest::StateMachine::new(
+            1,
+            || {
+                active.set(true);
+                Result::Ok((0, active))
+            },
+            |model: isize, command: isize| Result::Ok(model + command),
+            |_: Ref[bool], _: isize| panic::raise("external system panic"),
+            |_: isize, _: Ref[bool]| Result::Ok(()),
+            |resource: Ref[bool]| {
+                resource.set(false);
+                Result::Ok(())
+            },
+        ),
+        "machine",
+    );
+    let caught = testing::expect_err(
+        panic::catch(|| machine.check(Vec::from_array([1]))),
+        "execution panic",
+    );
+    testing::assert_eq(caught.message(), "external system panic");
+    testing::assert(!active.get());
+}
