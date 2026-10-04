@@ -107,8 +107,8 @@ fn pair_sample[T, U](left: Sample[T], right: Sample[U]) -> Sample[(T, U)] {
     Sample::lazy(
         (left.value, right.value),
         || {
-            let first = left.candidates();
-            let second = right.candidates();
+            let first = DeferredCandidates::new(left);
+            let second = DeferredCandidates::new(right);
             let left_done = Ref::new(false);
             Candidates::from_fn(
                 |budget| {

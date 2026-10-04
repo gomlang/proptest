@@ -121,3 +121,29 @@ impl[T] Sample[T] {
         result
     }
 }
+
+struct DeferredCandidates[T] {
+    sample: Sample[T],
+    current: Ref[Option[Candidates[T]]],
+}
+
+impl[T] DeferredCandidates[T] {
+    fn new(sample: Sample[T]) -> DeferredCandidates[T] {
+        DeferredCandidates { sample, current: Ref::new(Option::None) }
+    }
+
+    fn next(self: DeferredCandidates[T], budget: ShrinkBudget) -> Option[Sample[T]] {
+        if budget.exhausted() {
+            return Option::None
+        }
+        let current = match self.current.get() {
+            Some(current) => current,
+            None => {
+                let current = self.sample.candidates();
+                self.current.set(Option::Some(current));
+                current
+            },
+        };
+        current.next(budget)
+    }
+}

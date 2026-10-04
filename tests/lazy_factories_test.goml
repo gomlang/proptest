@@ -1,0 +1,96 @@
+package tests;
+
+use ecosystem::proptest;
+use proptest::Strategy;
+use std::testing;
+
+fn counted_shrinker(value: isize, expanded: Ref[isize]) -> proptest::Generator[isize] {
+    proptest::Generator::new(
+        |_, _| Result::Ok(
+            proptest::Sample::lazy(
+                value,
+                || {
+                    expanded.set(expanded.get() + 1);
+                    let done = Ref::new(false);
+                    proptest::Candidates::from_fn(
+                        |_| {
+                            if done.get() {
+                                Option::None
+                            } else {
+                                done.set(true);
+                                Option::Some(proptest::Sample::leaf(value - 1))
+                            }
+                        },
+                    )
+                },
+            ),
+        ),
+    )
+}
+
+#[test]
+fn optional_absence_does_not_expand_the_present_values_shrinker() -> () {
+    let expanded = Ref::new(0);
+    let sample = testing::expect_ok(
+        proptest::optional(counted_shrinker(10, expanded)).generate(0, 1),
+        "sample",
+    );
+    testing::assert(sample.value == Option::Some(10));
+    let children = sample.candidates();
+    testing::assert_eq(expanded.get(), 0);
+    let budget = testing::expect_ok(proptest::ShrinkBudget::new(1), "one candidate");
+    testing::assert_none(testing::expect_some(children.next(budget), "absence").value);
+    testing::assert_none(children.next(budget));
+    testing::assert_eq(expanded.get(), 0);
+    let children = sample.candidates();
+    let budget = testing::expect_ok(proptest::ShrinkBudget::new(20), "budget");
+    testing::assert_none(testing::expect_some(children.next(budget), "absence").value);
+    testing::assert(
+        testing::expect_some(children.next(budget), "present shrink").value == Option::Some(9),
+    );
+    testing::assert_eq(expanded.get(), 1);
+    testing::assert_none(children.next(budget));
+    testing::assert_eq(expanded.get(), 1);
+}
+
+#[test]
+fn zipped_shrinkers_open_the_right_factory_only_after_left_candidates_finish() -> () {
+    let left = Ref::new(0);
+    let right = Ref::new(0);
+    let sample = testing::expect_ok(
+        counted_shrinker(10, left).zip(counted_shrinker(20, right)).generate(0, 1),
+        "sample",
+    );
+    let children = sample.candidates();
+    testing::assert_eq(left.get(), 0);
+    testing::assert_eq(right.get(), 0);
+    let budget = testing::expect_ok(proptest::ShrinkBudget::new(20), "budget");
+    testing::assert(testing::expect_some(children.next(budget), "left shrink").value == (9, 20));
+    testing::assert_eq(left.get(), 1);
+    testing::assert_eq(right.get(), 0);
+    testing::assert(testing::expect_some(children.next(budget), "right shrink").value == (10, 19));
+    testing::assert_eq(left.get(), 1);
+    testing::assert_eq(right.get(), 1);
+    testing::assert_none(children.next(budget));
+}
+
+#[test]
+fn dependent_shrinkers_leave_the_outer_factory_unopened_while_inner_candidates_remain() -> () {
+    let outside = Ref::new(0);
+    let inside = Ref::new(0);
+    let generator = counted_shrinker(10, outside).flat_map(
+        |value| counted_shrinker(value * 10, inside),
+    );
+    let sample = testing::expect_ok(generator.generate(0, 1), "sample");
+    let children = sample.candidates();
+    testing::assert_eq(inside.get(), 0);
+    testing::assert_eq(outside.get(), 0);
+    let budget = testing::expect_ok(proptest::ShrinkBudget::new(20), "budget");
+    testing::assert_eq(testing::expect_some(children.next(budget), "inner shrink").value, 99);
+    testing::assert_eq(inside.get(), 1);
+    testing::assert_eq(outside.get(), 0);
+    testing::assert_eq(testing::expect_some(children.next(budget), "outer shrink").value, 90);
+    testing::assert_eq(inside.get(), 1);
+    testing::assert_eq(outside.get(), 1);
+    testing::assert_none(children.next(budget));
+}

@@ -256,6 +256,12 @@ Budget/cap exhaustion returns the best counterexample found, with
 `shrink_limited = true`; it does not claim a fully explored local minimum.
 Zero work or zero shrink attempts does not invoke the sample's shrink factory.
 
+Optional shrinking offers `None` before opening the present value's shrink
+factory; `zip` opens the right factory after exhausting left candidates, and
+`flat_map` opens the outer factory after exhausting inner candidates. These
+factories run at most once per candidate traversal. Candidate order and work
+charges are unchanged.
+
 The runner never calls the compatibility `children()` materializer. Explicit
 calls to `children()` collect the candidate stream into a vector and can use
 substantial memory. Legacy `Sample::new` callbacks still produce their own vector

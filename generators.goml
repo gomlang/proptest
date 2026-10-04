@@ -93,7 +93,7 @@ fn optional_sample[T](sample: Sample[T]) -> Sample[Option[T]] {
         Option::Some(sample.value),
         || {
             let first = Ref::new(true);
-            let children = sample.candidates();
+            let children = DeferredCandidates::new(sample);
             Candidates::from_fn(
                 |budget| {
                     if first.get() {
@@ -206,8 +206,8 @@ fn dependent_sample[T, U](
     Sample::lazy(
         inner.value,
         || {
-            let inside = inner.candidates();
-            let outside = outer.candidates();
+            let inside = DeferredCandidates::new(inner);
+            let outside = DeferredCandidates::new(outer);
             let inner_done = Ref::new(false);
             Candidates::from_fn(
                 |budget| {
