@@ -89,23 +89,21 @@ pub struct RunReport[T] {
     pub shrink_limited: bool,
 }
 
-fn increment_count(counts: Vec[(string, isize)], name: string) -> () {
-    for index in 0..counts.len() {
-        if counts[index].0 == name {
-            counts[index] = (name, counts[index].1 + 1);
-            return
-        }
+fn increment_count(counts: Vec[(string, isize)], positions: HashMap[string, isize], name: string) -> () {
+    if let Some(index) = positions.get(name) {
+        counts[index] = (name, counts[index].1 + 1);
+    } else {
+        positions.set(name, counts.len());
+        counts.push((name, 1));
     }
-    counts.push((name, 1));
 }
 
-fn label_count(counts: Vec[(string, isize)], name: string) -> isize {
-    for entry in counts {
-        if entry.0 == name {
-            return entry.1
-        }
+fn label_count(counts: Vec[(string, isize)], positions: HashMap[string, isize], name: string) -> isize {
+    if let Some(index) = positions.get(name) {
+        counts[index].1
+    } else {
+        0
     }
-    0
 }
 
 struct Shrunk[T] {

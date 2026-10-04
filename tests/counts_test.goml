@@ -1,0 +1,102 @@
+package tests;
+
+use ecosystem::proptest;
+use std::testing;
+
+#[test]
+fn campaign_counts_keep_first_seen_order_and_distinguish_exact_names() -> () {
+    let regressions = Vec::new();
+    for seed in Vec::from_array([0, 1, 2, 3, 4, 0, 4]) {
+        regressions.push(proptest::Replay { seed: seed.to_u64(), size: 0 });
+    }
+    let options = proptest::CampaignOptions {
+        run: proptest::RunOptions {
+            config: proptest::Config { cases: 0, max_shrinks: 0, ..proptest::Config::new(0) },
+            regressions,
+            ..proptest::RunOptions::new(0),
+        },
+        ..proptest::CampaignOptions::new(0),
+    };
+    let generator = proptest::Generator::new(
+        |seed, _| Result::Ok(proptest::Sample::leaf(seed.to_isize())),
+    );
+    let report = testing::expect_ok(
+        proptest::run_campaign(
+            generator,
+            options,
+            |value: isize| {
+                let case = match value {
+                    0 => proptest::Case::pass().label("").label("猫").label("").label("a\u0000b"),
+                    1 => proptest::Case::discard("").label("ignored"),
+                    2 => proptest::Case::fail("failure").label("a").label("猫").label("a"),
+                    3 => proptest::Case::discard("猫").label("ignored"),
+                    _ => proptest::Case::pass().label("a\u0000b").label("猫"),
+                };
+                proptest::Observation::new(case)
+            },
+        ),
+        "counts",
+    );
+    testing::assert(report.completed);
+    testing::assert_eq(report.summary.cases, 5);
+    testing::assert_eq(report.summary.discarded, 2);
+    testing::assert_eq(report.summary.status, proptest::RunStatus::Failed);
+    testing::assert(
+        report.summary.labels == Vec::from_array([("", 2), ("猫", 5), ("a\u0000b", 4), ("a", 1)]),
+    );
+    testing::assert(report.summary.discard_reasons == Vec::from_array([("", 1), ("猫", 1)]));
+}
+
+#[test]
+fn many_category_counts_preserve_duplicates_coverage_and_run_isolation() -> () {
+    let regressions = Vec::new();
+    for seed in 0..512 {
+        regressions.push(proptest::Replay { seed: seed.to_u64(), size: 0 });
+    }
+    for offset in 0..512 {
+        regressions.push(proptest::Replay { seed: (511 - offset).to_u64(), size: 0 });
+    }
+    let options = proptest::RunOptions {
+        config: proptest::Config { cases: 0, ..proptest::Config::new(0) },
+        regressions,
+        coverage: Vec::from_array(
+            [
+                proptest::Coverage { label: "missing", minimum_percent: 0 },
+                proptest::Coverage { label: "common", minimum_percent: 100 },
+            ],
+        ),
+        ..proptest::RunOptions::new(0),
+    };
+    let generator = proptest::Generator::new(|seed, _| Result::Ok(proptest::Sample::leaf(seed)));
+    let property = |seed: u64| {
+        let name = "label" + seed.to_string();
+        proptest::Case::pass().label(name).label("common").label(name)
+    };
+    let report = testing::expect_ok(proptest::run(generator, options, property), "many counts");
+    testing::assert_eq(report.status, proptest::RunStatus::Passed);
+    testing::assert_eq(report.labels.len(), 513);
+    testing::assert(report.labels[0] == ("label0", 2));
+    testing::assert(report.labels[1] == ("common", 1024));
+    for index in 1..512 {
+        testing::assert(report.labels[index + 1] == ("label" + index.to_string(), 2));
+    }
+    let rejected = testing::expect_ok(
+        proptest::run(
+            generator,
+            proptest::RunOptions {
+                coverage: Vec::from_array(
+                    [
+                        proptest::Coverage { label: "label0", minimum_percent: 1 },
+                        proptest::Coverage { label: "missing", minimum_percent: 1 },
+                    ],
+                ),
+                ..options,
+            },
+            property,
+        ),
+        "coverage boundary",
+    );
+    testing::assert_eq(rejected.status, proptest::RunStatus::Rejected);
+    testing::assert_eq(rejected.message, "coverage requirement not met: label0 needs 1%");
+    testing::assert(rejected.labels == report.labels);
+}

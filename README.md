@@ -147,6 +147,10 @@ and fresh accepted cases, and round the required count upward. Discarded cases
 are excluded. Unmet coverage, including a positive requirement with no accepted
 cases, returns `Rejected` with a diagnostic.
 
+Classification and discard-reason counts retain first-observed name order.
+Per-run name indexes keep counting and coverage lookup from scanning previously
+seen categories; repeated labels on one case still contribute only once.
+
 ## Campaigns, distributions and failure aggregation
 
 `run_campaign(strategy, CampaignOptions, property)` continues after failures and

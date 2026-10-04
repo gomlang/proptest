@@ -178,6 +178,8 @@ pub fn run_campaign[S: Strategy](
     };
     let failures = Vec::new();
     let distributions = Distributions::new(options.max_histogram_buckets);
+    let label_positions: HashMap[string, isize] = HashMap::new();
+    let discard_positions: HashMap[string, isize] = HashMap::new();
     let mut seed = config.seed;
     let mut accepted = 0;
     let mut attempts = 0;
@@ -201,7 +203,7 @@ pub fn run_campaign[S: Strategy](
         match result.verdict {
             Discard(reason) => {
                 summary.discarded += 1;
-                increment_count(summary.discard_reasons, reason);
+                increment_count(summary.discard_reasons, discard_positions, reason);
                 if summary.discarded > run.max_discards {
                     completed = false;
                     stop_reason = "property exhausted its discard budget";
@@ -222,7 +224,7 @@ pub fn run_campaign[S: Strategy](
                 for name in result.labels {
                     if seen.get(name).is_none() {
                         seen.set(name, true);
-                        increment_count(summary.labels, name);
+                        increment_count(summary.labels, label_positions, name);
                     }
                 }
                 if let Fail(message) = result.verdict {
@@ -273,7 +275,7 @@ pub fn run_campaign[S: Strategy](
         for requirement in coverage {
             let minimum = summary.cases / 100 * requirement.minimum_percent
                 + (summary.cases % 100 * requirement.minimum_percent + 99) / 100;
-            if label_count(summary.labels, requirement.label) < minimum
+            if label_count(summary.labels, label_positions, requirement.label) < minimum
                 || summary.cases == 0 && requirement.minimum_percent > 0 {
                 summary.status = RunStatus::Rejected;
                 summary.message = f"coverage requirement not met: {requirement.label} needs {requirement.minimum_percent}%";
