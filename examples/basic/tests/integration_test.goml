@@ -140,3 +140,34 @@ fn optional_failure_shrinks_to_absence_without_opening_an_unused_factory() -> ()
     testing::assert_eq(report.shrink_work, 4);
     testing::assert(!report.shrink_limited);
 }
+
+#[test]
+fn filtered_failure_uses_an_accepted_sibling_without_opening_rejected_descendants() -> () {
+    let generator = proptest::Generator::new(
+        |_, _| Result::Ok(
+            proptest::Sample::new(
+                10,
+                || Vec::from_array(
+                    [
+                        proptest::Sample::lazy(1, || panic::raise("unvisited rejected subtree")),
+                        proptest::Sample::leaf(8),
+                    ],
+                ),
+            ),
+        ),
+    ).filter(|value| value % 2 == 0, 1);
+    let report = testing::expect_ok(
+        proptest::run(
+            generator,
+            proptest::RunOptions::new(0),
+            |_| proptest::Case::fail("counterexample"),
+        ),
+        "filtered runner",
+    );
+    let failure = testing::expect_some(report.failure, "failure");
+    testing::assert_eq(failure.initial, 10);
+    testing::assert_eq(failure.minimal, 8);
+    testing::assert_eq(failure.attempts, 1);
+    testing::assert_eq(report.shrink_work, 7);
+    testing::assert(!report.shrink_limited);
+}

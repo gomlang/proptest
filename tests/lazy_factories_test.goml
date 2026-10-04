@@ -94,3 +94,43 @@ fn dependent_shrinkers_leave_the_outer_factory_unopened_while_inner_candidates_r
     testing::assert_eq(outside.get(), 1);
     testing::assert_none(children.next(budget));
 }
+
+#[test]
+fn filtered_shrinkers_do_not_expand_rejected_subtrees_before_visiting_them() -> () {
+    let expanded = Ref::new(0);
+    let generator = proptest::Generator::new(
+        |_, _| Result::Ok(
+            proptest::Sample::new(
+                10,
+                || Vec::from_array(
+                    [
+                        proptest::Sample::lazy(
+                            1,
+                            || {
+                                expanded.set(expanded.get() + 1);
+                                proptest::Candidates::empty()
+                            },
+                        ),
+                        proptest::Sample::leaf(8),
+                    ],
+                ),
+            ),
+        ),
+    ).filter(|value| value % 2 == 0, 1);
+    let sample = testing::expect_ok(generator.generate(0, 1), "sample");
+    let children = sample.candidates();
+    let budget = testing::expect_ok(proptest::ShrinkBudget::new(20), "budget");
+    testing::assert_eq(testing::expect_some(children.next(budget), "accepted sibling").value, 8);
+    testing::assert_eq(expanded.get(), 0);
+    testing::assert_none(children.next(budget));
+    testing::assert_eq(expanded.get(), 1);
+    expanded.set(0);
+    let children = sample.candidates();
+    let budget = testing::expect_ok(
+        proptest::ShrinkBudget::new(2),
+        "budget exhausted after rejected node",
+    );
+    testing::assert_none(children.next(budget));
+    testing::assert(budget.exhausted());
+    testing::assert_eq(expanded.get(), 0);
+}

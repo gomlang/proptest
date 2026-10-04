@@ -35,7 +35,9 @@ fn filter_sample[T](sample: Sample[T], accept: (T) -> bool) -> Sample[T] {
     Sample::lazy(
         sample.value,
         || {
-            let pending: Vec[Candidates[T]] = Vec::from_array([sample.candidates()]);
+            let pending: Vec[DeferredCandidates[T]] = Vec::from_array(
+                [DeferredCandidates::new(sample)],
+            );
             let head = Ref::new(0);
             let visited = Ref::new(0);
             Candidates::from_fn(
@@ -47,7 +49,7 @@ fn filter_sample[T](sample: Sample[T], accept: (T) -> bool) -> Sample[T] {
                                 if accept(child.value) {
                                     return Option::Some(filter_sample(child, accept))
                                 }
-                                pending.push(child.candidates());
+                                pending.push(DeferredCandidates::new(child));
                             },
                             None => head.set(head.get() + 1),
                         }
