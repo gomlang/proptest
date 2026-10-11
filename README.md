@@ -320,7 +320,7 @@ and example tests exercise this form.
 ## Validation
 
 ```sh
-(cd ../verification && just ecosystem-test proptest)
+(cd ../workflows && just ecosystem-test proptest)
 ```
 
 Tests include exact integer failure boundaries, wide signed ranges, filtering,
@@ -339,11 +339,11 @@ resolved dependency.
 
 ## Development and examples
 
-Requires the source-built GoML toolchain with unversioned registry support pinned in [verification/ci/toolchain.json](https://github.com/gomlang/verification/blob/main/ci/toolchain.json). The `examples/basic/` example shares the root manifest. From the library root, run:
+Requires the source-built GoML toolchain with unversioned registry support pinned in [workflows/ci/toolchain.json](https://github.com/gomlang/workflows/blob/main/ci/toolchain.json). The `examples/basic/` example shares the root manifest. From the library root, run:
 
 ```sh
 goml run --example basic
 goml test
 ```
 
-`goml test` builds the example and runs its tests. `(cd ../verification && just ecosystem-test proptest)` also retains the library-specific smoke and compatibility checks.
+`goml test` builds the example and runs its tests. `(cd ../workflows && just ecosystem-test proptest)` also retains the library-specific smoke and compatibility checks.
